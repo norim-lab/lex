@@ -1431,6 +1431,9 @@
                     <p>Gesamt: ${totalTransactionsCount} Buchungen aus ${files.length} Dateien extrahiert.</p>
                     ${gaps.length > 0 ? `<p style="color: #c62828;">⚠️ <strong>Salden-Lücken erkannt:</strong><br>${gaps.join('<br>')}</p>` : '<p style="color: #2e7d32;">✓ Saldenverlauf ist lückenlos.</p>'}
                     ${errorCount > 0 ? `<p style="color: #ff6600;">Hinweis: ${errorCount} Datei(en) ohne Buchungen.</p>` : ''}
+                    <div style="margin-top: 10px; display: flex; gap: 10px;">
+                        <button onclick="reopenPreview()" class="btn-success">🔍 Vorschau öffnen</button>
+                    </div>
                 `;
                 
                 // Show ONE merged preview modal
@@ -1444,6 +1447,9 @@
                     gaps: gaps
                 };
                 
+                // Save for reopen
+                window.lastMergedResult = mergedResult;
+
                 // Validation for merged result
                 const validation = validateTransactionsWithAI(allExtractedTransactions, null, mergedResult);
                 if (gaps.length > 0) {
@@ -1457,6 +1463,19 @@
                     <p style="color: #ff6600;">⚠️ Keine Buchungen gefunden.</p>
                     <p>Möglicherweise haben die PDFs ein anderes Format.</p>
                 `;
+            }
+        }
+
+        function reopenPreview() {
+            if (window.lastMergedResult) {
+                const mergedResult = window.lastMergedResult;
+                const validation = validateTransactionsWithAI(mergedResult.transactions, null, mergedResult);
+                if (mergedResult.gaps && mergedResult.gaps.length > 0) {
+                    validation.issues.push(...mergedResult.gaps);
+                }
+                showPreviewModal(mergedResult, validation, 'batch-pdf');
+            } else {
+                alert('Keine vorherigen Ergebnisse gefunden.');
             }
         }
 
