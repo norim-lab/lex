@@ -3291,7 +3291,10 @@
                 // Dubletten-Check: Prüfe, ob diese Transaktion bereits in der Haupttabelle existiert
                 // Wichtig: Nur prüfen, wenn wir gerade importieren (also extractionResult da ist)
                 if (extractionResult) {
-                     const isDuplicate = window.transactions.some(existing => {
+                     // Sicherstellen, dass window.transactions existiert
+                     const existingTransactions = window.transactions || [];
+                     
+                     const isDuplicate = existingTransactions.some(existing => {
                          // Gleicher Betrag?
                          if (Math.abs(existing.amount - t.amount) > 0.01) return false;
                          
