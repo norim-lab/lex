@@ -549,7 +549,6 @@ ODER
         }
 
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -1219,8 +1218,6 @@ ODER
             <div class="tab-buttons">
                 <button class="tab-button active" onclick="switchTab('manual')">Manuell</button>
                 <button class="tab-button" onclick="switchTab('pdf')">PDF hochladen</button>
-                <button class="tab-button" onclick="switchTab('paste')">Copy & Paste</button>
-                <button class="tab-button" onclick="switchTab('screenshot')">Screenshot</button>
             </div>
 
             <div id="tab-manual" class="tab-content active">
@@ -1346,36 +1343,8 @@ ODER
                     </div>
                 </div>
 
-            <div id="tab-paste" class="tab-content">
-                <div class="upload-section">
-                    <h2>Copy & Paste</h2>
-                    <p>Kopieren Sie die Buchungen von Ihrer Bank-Webseite und fügen Sie sie hier ein.</p>
-                    <div class="form-group">
-                        <label for="pasteText">Text einfügen:</label>
-                        <textarea id="pasteText" rows="10" placeholder="Fügen Sie hier die kopierten Buchungen ein..."></textarea>
-                    </div>
-                    <button onclick="processPastedText()">Text verarbeiten</button>
-                    <div id="pasteStatus"></div>
-                </div>
-            </div>
-
-            <div id="tab-screenshot" class="tab-content">
-                <div class="upload-section">
-                    <h2>Screenshot hochladen</h2>
-                    <p>Laden Sie Screenshots von Ihren Kontoauszügen hoch. Die App wird den Text automatisch erkennen und Buchungen extrahieren.</p>
-                    <p style="color: #666; font-size: 14px;">Unterstützte Formate: PNG, JPG, JPEG, GIF</p>
-                    
-                    <div class="drop-zone" id="screenshotDropZone" onclick="document.getElementById('screenshotFileInput').click()">
-                        <div class="drop-zone-text">📸 Screenshot hierher ziehen</div>
-                        <div class="drop-zone-subtext">oder klicken zum Auswählen</div>
-                        <input type="file" id="screenshotFileInput" accept="image/png,image/jpeg,image/jpg,image/gif" multiple style="display: none;" onchange="handleScreenshotSelect(event)">
-                    </div>
-                    
-                    <div id="screenshotFileList" class="file-list" style="display: none;"></div>
-                    <div id="screenshotStatus"></div>
-                </div>
-            </div>
         </div>
+
 
         <div class="panel">
             <h2>Kontostand & Limit</h2>
@@ -2714,94 +2683,7 @@ ODER
             closeDuplicateModal();
         }
 
-        function handleScreenshotSelect(event) {
-            const files = event.target.files;
-            if (files.length > 0) {
-                processMultipleScreenshots(Array.from(files));
-            }
-        }
 
-        function processMultipleScreenshots(files) {
-            const fileListDiv = document.getElementById('screenshotFileList');
-            const statusDiv = document.getElementById('screenshotStatus');
-            
-            fileListDiv.innerHTML = '';
-            fileListDiv.style.display = 'block';
-            
-            let totalTransactions = 0;
-            let processedCount = 0;
-            let errorCount = 0;
-
-            files.forEach((file, index) => {
-                const fileItem = document.createElement('div');
-                fileItem.className = 'file-item';
-                fileItem.innerHTML = `
-                    <div class="file-item-name">${file.name}</div>
-                    <div class="file-item-status processing">Wird verarbeitet...</div>
-                `;
-                fileListDiv.appendChild(fileItem);
-
-                processScreenshotWithOCR(file, fileItem, (success, transactionCount, errorMessage) => {
-                    if (success && transactionCount > 0) {
-                        totalTransactions += transactionCount;
-                        fileItem.querySelector('.file-item-status').className = 'file-item-status success';
-                        fileItem.querySelector('.file-item-status').textContent = `✓ ${transactionCount} Buchungen`;
-                    } else {
-                        fileItem.querySelector('.file-item-status').className = 'file-item-status error';
-                        fileItem.querySelector('.file-item-status').textContent = errorMessage || 'Keine Buchungen';
-                        errorCount++;
-                    }
-
-                    processedCount++;
-
-                    if (processedCount === files.length) {
-                        if (totalTransactions > 0) {
-                            statusDiv.innerHTML = `
-                                <p style="color: #2e7d32;">✅ Erfolgreich abgeschlossen!</p>
-                                <p>Gesamt: ${totalTransactions} Buchungen aus ${files.length} Screenshot(s) extrahiert.</p>
-                                ${errorCount > 0 ? `<p style="color: #ff6600;">Hinweis: ${errorCount} Screenshot(s) ohne Buchungen.</p>` : ''}
-                            `;
-                        } else {
-                            statusDiv.innerHTML = `
-                                <p style="color: #ff6600;">⚠️ Keine Buchungen gefunden.</p>
-                                <p>Möglicherweise haben die Screenshots ein anderes Format oder die Erkennung war nicht erfolgreich.</p>
-                            `;
-                        }
-                    }
-                });
-            });
-        }
-
-        function processScreenshotWithOCR(file, fileItem, callback) {
-            const reader = new FileReader();
-            
-            reader.onload = function(e) {
-                const imageDataUrl = e.target.result;
-                
-                fileItem.querySelector('.file-item-status').textContent = 'OCR läuft...';
-                
-                Tesseract.recognize(
-                    imageDataUrl,
-                    'deu',
-                    {
-                        logger: m => {
-                            if (m.status === 'recognizing text') {
-                                const progress = Math.round(m.progress * 100);
-                                fileItem.querySelector('.file-item-status').textContent = `OCR läuft... ${progress}%`;
-                            }
-                        }
-                    }
-                ).then(async ({ data: { text } }) => {
-                    const transactions = await extractTransactionsFromOCRText(text);
-                    callback(true, transactions, null);
-                }).catch(error => {
-                    console.error('OCR Error:', error);
-                    callback(false, 0, `OCR-Fehler: ${error.message}`);
-                });
-            };
-
-            reader.readAsDataURL(file);
-        }
 
         function extractTransactionsFromOCRTextLegacy(text) {
             const lines = text.split('\n');
@@ -2870,57 +2752,7 @@ ODER
             return false;
         }
 
-        function setupScreenshotDragAndDrop() {
-            const dropZone = document.getElementById('screenshotDropZone');
 
-            if (!dropZone) return;
-
-            dropZone.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                dropZone.classList.add('dragover');
-            });
-
-            dropZone.addEventListener('dragleave', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                dropZone.classList.remove('dragover');
-            });
-
-            dropZone.addEventListener('drop', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                dropZone.classList.remove('dragover');
-
-                const files = e.dataTransfer.files;
-                
-                if (files.length > 0) {
-                    const imageFiles = Array.from(files).filter(file => 
-                        file.type === 'image/png' || 
-                        file.type === 'image/jpeg' || 
-                        file.type === 'image/jpg' || 
-                        file.type === 'image/gif'
-                    );
-                    
-                    if (imageFiles.length === 0) {
-                        alert('Bitte nur Bilddateien hochladen!');
-                        return;
-                    }
-
-                    if (imageFiles.length < files.length) {
-                        alert(`${files.length - imageFiles.length} Datei(en) wurden übersprungen (keine Bilder).`);
-                    }
-
-                    processMultipleScreenshots(imageFiles);
-                }
-            });
-        }
-
-        const originalSetupDragAndDrop = setupDragAndDrop;
-        setupDragAndDrop = function() {
-            originalSetupDragAndDrop();
-            setupScreenshotDragAndDrop();
-        };
 
         let debugInfo = {
             rawText: '',
@@ -4693,47 +4525,7 @@ ODER
                 return null;
             }
             
-            let prompt = '';
-            
-            if (source === 'paste') {
-                prompt = `Du bist ein Finanzdaten-Extraktor für manuelle Copy&Paste-Daten aus Banking-Apps.
-Analysiere den folgenden unstrukturierten Text und extrahiere Transaktionen.
-
-BEISPIEL FÜR EINGABE:
-"TRAE USD 3,00KURS1,1718750 20.02.2026 05:53 Uhr
-Buchung: 20.02.2026
-Valuta: 20.02.2026"
-
-INTERPRETATION:
-- Datum: "20.02.2026" (aus Zeile 1 oder "Buchung:")
-- Betrag: Berechne EUR aus USD/Kurs ODER suche nach explizitem EUR-Betrag.
-  - Hier: 3,00 USD / 1,171875 = 2,56 EUR.
-  - Falls kein Kurs da ist, suche nach "Betrag: X EUR".
-  - WICHTIG: Wenn der Betrag in Fremdwährung ist, rechne ihn um oder gib null zurück, wenn kein Kurs da ist.
-- Zweck: "TRAE" (Name vor dem Betrag)
-
-REGELN:
-1. Ignoriere reine Header wie "Buchung:", "Valuta:", "Umsatz:" wenn sie keine Werte haben.
-2. Wenn "Buchung: DD.MM.YYYY" und "Valuta: DD.MM.YYYY" separat stehen, gehören sie zur Transaktion davor.
-3. Fremdwährungen (USD, GBP, etc.) immer in EUR umrechnen wenn Kurs dabei steht (Betrag / Kurs).
-4. Negative Beträge erkennen (Soll/Haben).
-
-TEXT ZUR ANALYSE:
-${text}
-
-ANTWORTE NUR MIT JSON:
-{
-  "transactions": [
-    {
-      "date": "20.02.2026", 
-      "amount": -2.56, 
-      "description": "TRAE (USD 3,00)", 
-      "foreignCurrency": {"amount": 3.00, "currency": "USD", "rate": 1.171875}
-    }
-  ]
-}`;
-            } else {
-                prompt = `Du bist ein Finanzdaten-Extraktor für Consorsbank Kreditkartenkontoauszüge.
+            let prompt = `Du bist ein Finanzdaten-Extraktor für Consorsbank Kreditkartenkontoauszüge.
 
 STRUKTUR DES KONTOAUSZUGS:
 - Seite 1: Info-Seite mit Gesamtsaldo und Abrechnungszeitraum (ignorieren)
@@ -4769,7 +4561,6 @@ Antworte NUR mit gültigem JSON:
     {"date": "23.06.2025", "amount": -24.99, "description": "GOOGLE *PARAMOUNT"}
   ]
 }`;
-            }
 
             try {
                 console.log('KI: Starte Anfrage an', settings.provider);
