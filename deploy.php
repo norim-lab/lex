@@ -1,28 +1,29 @@
 <?php
-// Secret Key (Sicherheit): Ändern Sie dies in etwas Komplexes!
-$secret = 'MySecretWebhookKey123';
+// Secret Key zur Sicherheit (damit nicht jeder den Deploy auslösen kann)
+$secret = 'MironSecureDeploy2026';
 
-// GitHub Payload prüfen
+// GitHub sendet den Payload als JSON
 $payload = file_get_contents('php://input');
 $signature = $_SERVER['HTTP_X_HUB_SIGNATURE'] ?? '';
 
-if (!$signature) {
+// Einfacher Check (optional: echte Signaturprüfung mit HMAC)
+// Für den Anfang reicht es, wenn wir den Secret als GET-Parameter prüfen, 
+// aber GitHub Webhooks senden POST. Wir machen es ganz simpel:
+// Wir prüfen nur, ob der Aufruf von GitHub kommt (optional) oder einfach immer pullen.
+
+// Besser: Wir nutzen einen GET-Parameter ?token=...
+if (($_GET['token'] ?? '') !== $secret) {
     http_response_code(403);
-    die('Forbidden: No signature');
+    die('Access denied');
 }
 
-list($algo, $hash) = explode('=', $signature, 2);
-$payloadHash = hash_hmac($algo, $payload, $secret);
+// Befehl ausführen
+// Wir müssen sicherstellen, dass wir im richtigen Verzeichnis sind
+chdir(__DIR__);
 
-if (!hash_equals($payloadHash, $hash)) {
-    http_response_code(403);
-    die('Forbidden: Invalid signature');
-}
-
-// Wenn Signatur OK -> Pull ausführen
-// Wir leiten stderr nach stdout um (2>&1), um Fehler zu sehen
-// "git pull" wird als der User ausgeführt, dem der Webserver gehört (oft www-data oder miron777)
-$output = shell_exec('cd /home/miron777/web/lex.zeitblytz.media/public_html && git pull 2>&1');
+// Git Pull ausführen
+// 2>&1 leitet Fehler auch in den Output um
+$output = shell_exec('git pull 2>&1');
 
 echo "<pre>$output</pre>";
 ?>
