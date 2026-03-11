@@ -1,29 +1,45 @@
 <?php
-// Secret Key zur Sicherheit (damit nicht jeder den Deploy auslösen kann)
+// Debugging aktivieren
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 $secret = 'MironSecureDeploy2026';
+$logFile = 'deploy.log';
 
-// GitHub sendet den Payload als JSON
-$payload = file_get_contents('php://input');
-$signature = $_SERVER['HTTP_X_HUB_SIGNATURE'] ?? '';
+function logMsg($msg) {
+    global $logFile;
+    $date = date('Y-m-d H:i:s');
+    file_put_contents($logFile, "[$date] $msg\n", FILE_APPEND);
+}
 
-// Einfacher Check (optional: echte Signaturprüfung mit HMAC)
-// Für den Anfang reicht es, wenn wir den Secret als GET-Parameter prüfen, 
-// aber GitHub Webhooks senden POST. Wir machen es ganz simpel:
-// Wir prüfen nur, ob der Aufruf von GitHub kommt (optional) oder einfach immer pullen.
-
-// Besser: Wir nutzen einen GET-Parameter ?token=...
+// Token Check
 if (($_GET['token'] ?? '') !== $secret) {
+    logMsg("Access denied: Invalid token");
     http_response_code(403);
     die('Access denied');
 }
 
-// Befehl ausführen
-// Wir müssen sicherstellen, dass wir im richtigen Verzeichnis sind
+logMsg("Deploy gestartet...");
+
+// Verzeichnis wechseln
 chdir(__DIR__);
+logMsg("Verzeichnis: " . getcwd());
 
 // Git Pull ausführen
-// 2>&1 leitet Fehler auch in den Output um
-$output = shell_exec('git pull 2>&1');
+// Wir nutzen 'git pull origin main' explizit
+$output = [];
+$returnVar = 0;
+exec("git pull origin main 2>&1", $output, $returnVar);
 
-echo "<pre>$output</pre>";
+$outputStr = implode("\n", $output);
+logMsg("Git Output:\n$outputStr");
+logMsg("Return Code: $returnVar");
+
+if ($returnVar === 0) {
+    echo "<h1>Deploy Success!</h1><pre>$outputStr</pre>";
+} else {
+    echo "<h1>Deploy Failed!</h1><pre>$outputStr</pre>";
+    http_response_code(500);
+}
 ?>
