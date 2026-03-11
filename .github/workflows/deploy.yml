@@ -22,5 +22,5 @@ jobs:
         target: "/home/miron777/web/lex.zeitblytz.media/public_html"
         strip_components: 0
         overwrite: true
-        debug: true  # Debug-Modus aktivieren!
+        # debug: true  # Debug-Modus wieder aus
         # exclude entfernt, da nicht unterstützt
