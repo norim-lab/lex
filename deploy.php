@@ -27,14 +27,33 @@ chdir(__DIR__);
 logMsg("Verzeichnis: " . getcwd());
 
 // Git Pull ausführen
-// Wir nutzen 'git pull origin main' explizit
-$output = [];
+// Versuche verschiedene Methoden
+$outputStr = "";
 $returnVar = 0;
-exec("git pull origin main 2>&1", $output, $returnVar);
 
-$outputStr = implode("\n", $output);
+if (function_exists('shell_exec')) {
+    logMsg("Using shell_exec...");
+    $outputStr = shell_exec("git pull origin main 2>&1");
+    if (empty($outputStr)) {
+        $outputStr = "Command executed but no output returned.";
+    }
+} elseif (function_exists('exec')) {
+    logMsg("Using exec...");
+    exec("git pull origin main 2>&1", $output, $returnVar);
+    $outputStr = implode("\n", $output);
+} elseif (function_exists('system')) {
+    logMsg("Using system...");
+    ob_start();
+    system("git pull origin main 2>&1", $returnVar);
+    $outputStr = ob_get_clean();
+} else {
+    logMsg("No execution function available!");
+    $outputStr = "Error: No execution function available (exec, shell_exec, system disabled)";
+    $returnVar = 1;
+}
+
 logMsg("Git Output:\n$outputStr");
-logMsg("Return Code: $returnVar");
+
 
 if ($returnVar === 0) {
     echo "<h1>Deploy Success!</h1><pre>$outputStr</pre>";
