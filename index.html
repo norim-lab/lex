@@ -842,10 +842,10 @@
 
         // Globale Transaktionsliste
         let transactions = [];
-        // let pendingTransactions = []; // ENTFERNT: Doppelt
-        // let detectedBalance = null; // ENTFERNT: Doppelt
-        // let detectedOpeningBalance = null; // ENTFERNT: Doppelt
-        // let detectedClosingBalance = null; // ENTFERNT: Doppelt
+        let pendingTransactions = [];
+        let detectedBalance = null;
+        let detectedOpeningBalance = null;
+        let detectedClosingBalance = null;
         
         // Beim Laden der Seite: Daten abrufen
         document.addEventListener('DOMContentLoaded', async () => {
@@ -2312,10 +2312,10 @@
             sampleLines: []
         };
 
-        let pendingTransactions = [];
-        let detectedBalance = null;
-        let detectedOpeningBalance = null;
-        let detectedClosingBalance = null;
+        // let pendingTransactions = []; // ENTFERNT: Doppelt
+        // let detectedBalance = null; // ENTFERNT: Doppelt
+        // let detectedOpeningBalance = null; // ENTFERNT: Doppelt
+        // let detectedClosingBalance = null; // ENTFERNT: Doppelt
 
         function detectBalanceFromText(text) {
             const lines = text.split('\n');
