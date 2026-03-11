@@ -1439,9 +1439,9 @@
                 // Show ONE merged preview modal
                 const mergedResult = {
                     transactions: allExtractedTransactions,
-                    openingBalance: allResults[0].result.openingBalance, // Chronologisch erster
-                    closingBalance: allResults[allResults.length - 1].result.closingBalance, // Chronologisch letzter
-                    detectedBalance: allResults[allResults.length - 1].result.closingBalance,
+                    openingBalance: allResults[0] && allResults[0].result ? allResults[0].result.openingBalance : null, 
+                    closingBalance: allResults[allResults.length - 1] && allResults[allResults.length - 1].result ? allResults[allResults.length - 1].result.closingBalance : null,
+                    detectedBalance: allResults[allResults.length - 1] && allResults[allResults.length - 1].result ? allResults[allResults.length - 1].result.closingBalance : null,
                     totalTransactions: totalTransactionsCount,
                     balanceChain: balanceChain,
                     gaps: gaps
@@ -1451,12 +1451,17 @@
                 window.lastMergedResult = mergedResult;
 
                 // Validation for merged result
-                const validation = validateTransactionsWithAI(allExtractedTransactions, null, mergedResult);
-                if (gaps.length > 0) {
-                    validation.issues.push(...gaps);
+                try {
+                    const validation = validateTransactionsWithAI(allExtractedTransactions, null, mergedResult);
+                    if (gaps.length > 0) {
+                        validation.issues.push(...gaps);
+                    }
+                    
+                    showPreviewModal(mergedResult, validation, 'batch-pdf');
+                } catch (error) {
+                    console.error("Fehler beim Anzeigen der Vorschau (Batch):", error);
+                    statusDiv.innerHTML += `<br><span style="color:red">Fehler beim Anzeigen der Vorschau: ${error.message}</span>`;
                 }
-                
-                showPreviewModal(mergedResult, validation, 'batch-pdf');
                 
             } else {
                 statusDiv.innerHTML = `
@@ -1467,15 +1472,20 @@
         }
 
         function reopenPreview() {
-            if (window.lastMergedResult) {
-                const mergedResult = window.lastMergedResult;
-                const validation = validateTransactionsWithAI(mergedResult.transactions, null, mergedResult);
-                if (mergedResult.gaps && mergedResult.gaps.length > 0) {
-                    validation.issues.push(...mergedResult.gaps);
+            try {
+                if (window.lastMergedResult) {
+                    const mergedResult = window.lastMergedResult;
+                    const validation = validateTransactionsWithAI(mergedResult.transactions, null, mergedResult);
+                    if (mergedResult.gaps && mergedResult.gaps.length > 0) {
+                        validation.issues.push(...mergedResult.gaps);
+                    }
+                    showPreviewModal(mergedResult, validation, 'batch-pdf');
+                } else {
+                    alert('Keine vorherigen Ergebnisse gefunden.');
                 }
-                showPreviewModal(mergedResult, validation, 'batch-pdf');
-            } else {
-                alert('Keine vorherigen Ergebnisse gefunden.');
+            } catch (error) {
+                console.error("Fehler beim Öffnen der Vorschau:", error);
+                alert("Fehler beim Öffnen der Vorschau: " + error.message);
             }
         }
 
