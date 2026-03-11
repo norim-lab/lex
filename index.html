@@ -55,6 +55,17 @@
                 <!-- Add Transaction Form (Hidden by default) -->
                 <div id="addTransactionForm" style="display: none; background: #f5f5f5; padding: 15px; margin-top: 15px; border-radius: 5px;">
                     <h4>Manuelle Buchung hinzufügen</h4>
+                    
+                    <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 5px;">
+                        <strong>🤖 KI-Nachprüfung:</strong>
+                        <p style="font-size: 12px; margin: 5px 0;">Beschreiben Sie kurz, was fehlt (z.B. "Rewe ca 50 Euro"), und die KI sucht nochmal im Original-Dokument.</p>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="aiSearchContext" placeholder="z.B. Rewe 50 Euro" style="flex: 1;">
+                            <button class="btn-primary" onclick="askAIForMissingTransaction()">🔍 Suchen</button>
+                        </div>
+                        <div id="aiSearchStatus" style="font-size: 12px; margin-top: 5px; color: #666;"></div>
+                    </div>
+
                     <div class="form-row">
                         <div class="form-group">
                             <label>Datum</label>
@@ -186,34 +197,152 @@
 
             // Verify button state
             const verifyBtn = document.getElementById('btnVerifyStatement');
+            const allConfirmed = transactions.every(t => t.status === 'confirmed');
+            
             if (statement.status === 'verified') {
                 verifyBtn.disabled = true;
                 verifyBtn.innerText = "Bereits bestätigt";
                 verifyBtn.classList.remove('btn-success');
                 verifyBtn.classList.add('btn-secondary');
-            } else {
+            } else if (allConfirmed) {
                 verifyBtn.disabled = false;
                 verifyBtn.innerText = "✓ Auszug als korrekt bestätigen";
                 verifyBtn.classList.add('btn-success');
                 verifyBtn.classList.remove('btn-secondary');
+            } else {
+                verifyBtn.disabled = true;
+                verifyBtn.innerText = "Erst alle Buchungen prüfen!";
+                verifyBtn.classList.remove('btn-success');
+                verifyBtn.classList.add('btn-secondary');
             }
 
-            // Render Table
+            // Render Table with Confirmation Logic
             const tbody = document.getElementById('statementTransactionsList');
-            tbody.innerHTML = transactions.map(t => `
-                <tr>
+            tbody.innerHTML = transactions.map(t => {
+                const isConfirmed = t.status === 'confirmed';
+                const rowClass = isConfirmed ? 'confirmed' : 'pending';
+                const statusIcon = isConfirmed ? '✅' : '❓';
+                
+                return `
+                <tr class="verification-table ${rowClass}" id="row-${t.id}">
                     <td>${new Date(t.date).toLocaleDateString('de-DE')}</td>
-                    <td>${t.purpose}</td>
+                    <td>
+                        <div style="font-weight: 500;">${t.purpose}</div>
+                        <div style="font-size: 11px; color: #666;">${t.category}</div>
+                    </td>
                     <td class="${t.amount >= 0 ? 'positive' : 'negative'}">${parseFloat(t.amount).toFixed(2)} €</td>
                     <td>
-                        ${statement.status !== 'verified' ? 
-                            `<button class="btn-danger" style="padding: 2px 5px; font-size: 12px;" onclick="deleteTransactionFromStatement(${t.id})">Löschen</button>` 
-                            : ''}
+                        ${!isConfirmed ? 
+                            `<button class="action-btn btn-confirm" onclick="confirmTransaction(${t.id})" title="Bestätigen">✅</button>` : 
+                            `<span style="color: #ccc;">✔</span>`
+                        }
+                        <button class="action-btn btn-edit" onclick="editTransaction(${t.id})" title="Bearbeiten">✏️</button>
+                        <button class="action-btn" style="color: #c62828;" onclick="deleteTransactionFromStatement(${t.id})" title="Löschen">🗑️</button>
                     </td>
                 </tr>
-            `).join('');
+                <tr id="edit-row-${t.id}" style="display: none;">
+                    <td colspan="4" class="edit-row">
+                        <div class="edit-form">
+                            <input type="date" id="edit-date-${t.id}" value="${t.date.split('T')[0]}">
+                            <input type="text" id="edit-purpose-${t.id}" value="${t.purpose.replace(/"/g, '&quot;')}" placeholder="Verwendungszweck">
+                            <input type="number" step="0.01" id="edit-amount-${t.id}" value="${t.amount}">
+                            <select id="edit-category-${t.id}">
+                                <option value="sonstiges" ${t.category === 'sonstiges' ? 'selected' : ''}>Sonstiges</option>
+                                <option value="lebensmittel" ${t.category === 'lebensmittel' ? 'selected' : ''}>Lebensmittel</option>
+                                <option value="miete" ${t.category === 'miete' ? 'selected' : ''}>Miete</option>
+                                <option value="gehalt" ${t.category === 'gehalt' ? 'selected' : ''}>Gehalt</option>
+                                <option value="tanken" ${t.category === 'tanken' ? 'selected' : ''}>Tanken</option>
+                                <option value="restaurant" ${t.category === 'restaurant' ? 'selected' : ''}>Restaurant</option>
+                                <option value="telekom" ${t.category === 'telekom' ? 'selected' : ''}>Telekom</option>
+                                <option value="strom" ${t.category === 'strom' ? 'selected' : ''}>Strom</option>
+                                <option value="versicherung" ${t.category === 'versicherung' ? 'selected' : ''}>Versicherung</option>
+                                <option value="freizeit" ${t.category === 'freizeit' ? 'selected' : ''}>Freizeit</option>
+                                <option value="kleidung" ${t.category === 'kleidung' ? 'selected' : ''}>Kleidung</option>
+                                <option value="reisen" ${t.category === 'reisen' ? 'selected' : ''}>Reisen</option>
+                                <option value="gesundheit" ${t.category === 'gesundheit' ? 'selected' : ''}>Gesundheit</option>
+                                <option value="bildung" ${t.category === 'bildung' ? 'selected' : ''}>Bildung</option>
+                            </select>
+                            <div>
+                                <button class="btn-success" onclick="saveTransactionEdit(${t.id}, '${t.purpose.replace(/'/g, "\\'")}')">Speichern</button>
+                                <button class="btn-secondary" onclick="cancelEdit(${t.id})">Abbrechen</button>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                `;
+            }).join('');
 
             document.getElementById('statementModal').style.display = 'block';
+        }
+
+        async function confirmTransaction(id) {
+            try {
+                const response = await fetch(API_URL + '?action=confirm_transaction', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id: id})
+                });
+                if ((await response.json()).success) {
+                    // Update UI locally without full reload
+                    const row = document.getElementById(`row-${id}`);
+                    if(row) {
+                        row.classList.remove('pending');
+                        row.classList.add('confirmed');
+                        // Hide confirm button
+                        const cell = row.cells[3];
+                        cell.innerHTML = `
+                            <span style="color: #ccc;">✔</span>
+                            <button class="action-btn btn-edit" onclick="editTransaction(${id})" title="Bearbeiten">✏️</button>
+                            <button class="action-btn" style="color: #c62828;" onclick="deleteTransactionFromStatement(${id})" title="Löschen">🗑️</button>
+                        `;
+                    }
+                    // Check if all confirmed to enable verify button
+                    // Re-fetch logic is cleaner
+                    openStatement(currentStatementId);
+                }
+            } catch (e) {
+                alert("Fehler beim Bestätigen");
+            }
+        }
+
+        function editTransaction(id) {
+            document.getElementById(`edit-row-${id}`).style.display = 'table-row';
+            document.getElementById(`row-${id}`).style.display = 'none';
+        }
+
+        function cancelEdit(id) {
+            document.getElementById(`edit-row-${id}`).style.display = 'none';
+            document.getElementById(`row-${id}`).style.display = 'table-row';
+        }
+
+        async function saveTransactionEdit(id, originalPurpose) {
+            const date = document.getElementById(`edit-date-${id}`).value;
+            const purpose = document.getElementById(`edit-purpose-${id}`).value;
+            const amount = parseFloat(document.getElementById(`edit-amount-${id}`).value);
+            const category = document.getElementById(`edit-category-${id}`).value;
+
+            try {
+                const response = await fetch(API_URL + '?action=update_transaction', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        id: id,
+                        date: date,
+                        purpose: purpose,
+                        amount: amount,
+                        category: category,
+                        original_purpose: originalPurpose // For learning!
+                    })
+                });
+                
+                if ((await response.json()).success) {
+                    openStatement(currentStatementId); // Reload to reflect changes
+                } else {
+                    alert("Fehler beim Speichern");
+                }
+            } catch (e) {
+                alert("Netzwerkfehler");
+            }
         }
 
         function closeStatementModal() {
@@ -256,6 +385,7 @@
             const date = document.getElementById('addTransDate').value;
             const purpose = document.getElementById('addTransPurpose').value;
             const amount = parseFloat(document.getElementById('addTransAmount').value);
+            const context = document.getElementById('aiSearchContext').value; // Kontext für Lernen
             
             if (!date || !purpose || isNaN(amount)) {
                 alert("Bitte alle Felder ausfüllen.");
@@ -272,7 +402,8 @@
                         purpose: purpose,
                         amount: amount,
                         type: amount >= 0 ? 'credit' : 'debit',
-                        category: 'manuell'
+                        category: 'manuell',
+                        context_text: context // Send context if available
                     })
                 });
                 
@@ -281,6 +412,9 @@
                     hideAddTransactionForm();
                     // Reload details
                     openStatement(currentStatementId);
+                    // Clear search
+                    document.getElementById('aiSearchContext').value = '';
+                    document.getElementById('aiSearchStatus').innerText = '';
                 } else {
                     alert("Fehler beim Speichern: " + res.error);
                 }
@@ -302,6 +436,115 @@
                 }
             } catch (e) {
                 alert("Fehler beim Löschen");
+            }
+        }
+
+        async function askAIForMissingTransaction() {
+            const context = document.getElementById('aiSearchContext').value;
+            const statusDiv = document.getElementById('aiSearchStatus');
+            
+            if (!context) {
+                alert("Bitte geben Sie einen Hinweis ein.");
+                return;
+            }
+            
+            statusDiv.innerHTML = "⏳ Lade Original-Text...";
+            
+            try {
+                // 1. Get Raw Text
+                const textResp = await fetch(`${API_URL}?action=get_raw_text&id=${currentStatementId}`);
+                const textData = await textResp.json();
+                const rawText = textData.raw_text;
+                
+                if (!rawText) {
+                    statusDiv.innerHTML = "❌ Fehler: Kein Originaltext verfügbar.";
+                    return;
+                }
+                
+                statusDiv.innerHTML = "🤖 KI analysiert Dokument...";
+                
+                const settings = getAISettings();
+                if (!settings.apiKey) {
+                    statusDiv.innerHTML = "❌ Kein API Key konfiguriert.";
+                    return;
+                }
+
+                const systemPrompt = `Du bist ein Forensiker für Bankdaten.
+Ein Nutzer vermisst eine Transaktion in diesem Text.
+Hinweis des Nutzers: "${context}"
+
+Durchsuche den Text extrem gründlich nach etwas, das dazu passen könnte (Datum, Betrag, ähnlicher Name).
+Der Text ist oft unstrukturiert (PDF-Copy).
+
+Text:
+${rawText}
+
+Antworte NUR mit JSON:
+{
+  "found": true,
+  "date": "YYYY-MM-DD",
+  "amount": 123.45,
+  "purpose": "Der gefundene Text",
+  "reason": "Warum das passt"
+}
+ODER
+{ "found": false, "reason": "Nichts gefunden" }`;
+
+                let resultJSON = null;
+                let content = '';
+
+                if (settings.provider === 'zhipu') {
+                    const response = await fetch('https://api.z.ai/api/coding/paas/v4/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${settings.apiKey}`
+                        },
+                        body: JSON.stringify({
+                            model: settings.zhipuModel,
+                            messages: [{ role: 'user', content: systemPrompt }]
+                        })
+                    });
+                    const data = await response.json();
+                    content = data.choices?.[0]?.message?.content;
+                } else {
+                    // Google Gemini logic
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${settings.apiKey}`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: systemPrompt }] }]
+                        })
+                    });
+                    const data = await response.json();
+                    content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                }
+
+                if (content) {
+                    // Extract JSON
+                    const match = content.match(/\{[\s\S]*\}/);
+                    if (match) {
+                        try {
+                            resultJSON = JSON.parse(match[0]);
+                        } catch(e) { console.error(e); }
+                    }
+                }
+
+                if (resultJSON && resultJSON.found) {
+                    statusDiv.innerHTML = `<span style="color: green;">✅ Gefunden!</span> ${resultJSON.reason}`;
+                    
+                    document.getElementById('addTransDate').value = resultJSON.date;
+                    document.getElementById('addTransPurpose').value = resultJSON.purpose;
+                    document.getElementById('addTransAmount').value = resultJSON.amount;
+                    document.getElementById('addTransPurpose').style.borderColor = 'green';
+                } else {
+                    statusDiv.innerHTML = `<span style="color: red;">❌ Nicht gefunden.</span> ${resultJSON ? resultJSON.reason : 'Keine Übereinstimmung.'}`;
+                }
+
+            } catch (e) {
+                statusDiv.innerHTML = "Fehler: " + e.message;
+                console.error(e);
             }
         }
 
@@ -930,6 +1173,33 @@
         }
         .status-pending { color: #ff9800; }
         .status-verified { color: #2e7d32; }
+
+        /* Verification Modal Styles */
+        .verification-table tr.confirmed {
+            background-color: #e8f5e9;
+        }
+        .verification-table tr.pending {
+            background-color: #fff3e0;
+        }
+        .action-btn {
+            cursor: pointer;
+            padding: 5px;
+            border: none;
+            background: none;
+            font-size: 16px;
+        }
+        .btn-confirm { color: #2e7d32; }
+        .btn-edit { color: #1976d2; }
+        
+        .edit-row {
+            background-color: #f5f5f5;
+        }
+        .edit-form {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr 1fr auto;
+            gap: 10px;
+            padding: 10px;
+        }
 
     </style>
 </head>
@@ -1756,6 +2026,10 @@
                                     
                                     // Nutze extractTransactionsWithAI direkt (KEIN Modal!)
                                     const result = await extractTransactionsWithAI(text, 'pdf');
+                                    
+                                    if (result) {
+                                        result.rawText = text; // NEU: Originaltext speichern
+                                    }
                                     
                                     if (result && result.transactions && result.transactions.length > 0) {
                                         const count = result.transactions.length;
@@ -4153,7 +4427,8 @@
                             period: item.periodStart ? `${item.periodStart.toLocaleDateString()} - ${item.periodEnd.toLocaleDateString()}` : 'Unbekannt',
                             openingBalance: item.result.openingBalance || 0,
                             closingBalance: item.result.closingBalance || 0,
-                            transactions: fileTrans
+                            transactions: fileTrans,
+                            rawText: item.result.rawText // NEW
                         };
                         
                         await saveStatementToDB(statementData);
@@ -4170,7 +4445,8 @@
                     period: 'Einzelimport',
                     openingBalance: detectedOpeningBalance || 0,
                     closingBalance: detectedClosingBalance || 0,
-                    transactions: selectedTransactions
+                    transactions: selectedTransactions,
+                    rawText: window.lastRawText || '' // NEW
                 };
                 await saveStatementToDB(statementData);
                 alert("Import erfolgreich!");
@@ -4193,6 +4469,7 @@
                         period: data.period,
                         openingBalance: data.openingBalance,
                         closingBalance: data.closingBalance,
+                        rawText: data.rawText || '', // NEW: Originaltext senden
                         transactions: data.transactions.map(t => ({
                             date: t.date.toISOString().split('T')[0],
                             purpose: t.purpose,
@@ -4220,7 +4497,9 @@
             detectedClosingBalance = null;
         }
 
-        async function extractTransactionsFromPDFText(text) {
+        async function extractTransactionsFromPDFText(text, filename = null) {
+            if(filename) window.lastImportedFilename = filename;
+            window.lastRawText = text; // NEW: Save for single import
             const result = await extractTransactionsWithAI(text, 'pdf');
             showPreviewModal(result, validateTransactionsWithAI(result.transactions, null, result), 'pdf');
             return result.totalTransactions;
