@@ -842,12 +842,11 @@
 
         // Globale Transaktionsliste
         let transactions = [];
-        let pendingTransactions = [];
-        let detectedBalance = null;
-        let detectedOpeningBalance = null;
-        let detectedClosingBalance = null;
-        // let setupDragAndDrop; // ENTFERNT: Verursacht Konflikt mit function declaration
-
+        // let pendingTransactions = []; // ENTFERNT: Doppelt
+        // let detectedBalance = null; // ENTFERNT: Doppelt
+        // let detectedOpeningBalance = null; // ENTFERNT: Doppelt
+        // let detectedClosingBalance = null; // ENTFERNT: Doppelt
+        
         // Beim Laden der Seite: Daten abrufen
         document.addEventListener('DOMContentLoaded', async () => {
             await loadTransactions();
