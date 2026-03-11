@@ -3770,24 +3770,6 @@
             }
             refreshPreviewTable();
         }
-                    break;
-                case 'amount_desc':
-                    pendingTransactions.sort((a, b) => b.amount - a.amount);
-                    break;
-                case 'confidence':
-                    pendingTransactions.sort((a, b) => b.confidence - a.confidence);
-                    break;
-                case 'warnings':
-                    pendingTransactions.sort((a, b) => a.warnings.length - b.warnings.length);
-                    break;
-                case 'fx':
-                    pendingTransactions.sort((a, b) => (b.foreignCurrency ? 1 : 0) - (a.foreignCurrency ? 1 : 0));
-                    break;
-                default:
-                    break;
-            }
-            refreshPreviewTable();
-        }
 
         function confirmPreviewTransactions() {
             const selectedTransactions = pendingTransactions.filter(t => t.selected !== false);
