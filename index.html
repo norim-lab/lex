@@ -837,7 +837,91 @@
     </div>
 
     <script>
+        // Datenbank-API URL
+        const API_URL = 'api.php';
+
+        // Globale Transaktionsliste
         let transactions = [];
+        let pendingTransactions = [];
+        let detectedBalance = null;
+        let detectedOpeningBalance = null;
+        let detectedClosingBalance = null;
+        let setupDragAndDrop; // Forward declaration
+
+        // Beim Laden der Seite: Daten abrufen
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadTransactions();
+            if (typeof setupDragAndDrop === 'function') setupDragAndDrop();
+        });
+
+        async function loadTransactions() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error('API Fehler');
+                
+                const data = await response.json();
+                
+                // Konvertiere Datum-Strings zurück zu Date-Objekten
+                transactions = data.map(t => ({
+                    ...t,
+                    date: new Date(t.date),
+                    creditAmount: t.type === 'credit' ? t.amount : null,
+                    debitAmount: t.type === 'debit' ? Math.abs(t.amount) : null
+                }));
+
+                updateTransactionTable();
+                console.log('Geladene Transaktionen:', transactions.length);
+            } catch (error) {
+                console.error('Fehler beim Laden:', error);
+                // Fallback: Lokaler Speicher (falls API nicht da ist, z.B. lokaler Test ohne PHP)
+            }
+        }
+
+        async function saveTransactionsToDB(newTransactions) {
+            // Konvertiere für API
+            const apiData = newTransactions.map(t => ({
+                date: t.date.toISOString().split('T')[0], // YYYY-MM-DD
+                purpose: t.purpose,
+                amount: t.amount,
+                type: t.amount >= 0 ? 'credit' : 'debit',
+                category: t.category,
+                source: 'pdf-import'
+            }));
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(apiData)
+                });
+                
+                const result = await response.json();
+                console.log('Gespeichert:', result);
+                if (result.saved > 0) {
+                    // Neu laden, um sicherzugehen, dass wir synchron sind
+                    await loadTransactions();
+                    alert(`${result.saved} neue Buchungen gespeichert! (${result.ignored} Duplikate ignoriert)`);
+                } else if (result.ignored > 0) {
+                    alert('Keine neuen Buchungen (alle bereits vorhanden).');
+                }
+            } catch (error) {
+                console.error('Speicherfehler:', error);
+                alert('Fehler beim Speichern: ' + error.message);
+            }
+        }
+
+        async function clearDatabase() {
+            if (!confirm('Wirklich ALLE gespeicherten Daten löschen? Dies kann nicht rückgängig gemacht werden!')) return;
+            
+            try {
+                await fetch(API_URL, { method: 'DELETE' });
+                transactions = [];
+                updateTransactionTable();
+                alert('Datenbank geleert.');
+            } catch (error) {
+                alert('Löschfehler: ' + error.message);
+            }
+        }
 
         const categoryKeywords = {
             lebensmittel: ['aldi', 'lidl', 'rewe', 'edeka', 'kaufland', 'netto', 'norma', 'penny', 'supermarkt', 'backhaus', 'bäckerei', 'fleischer', 'metzger', 'getränke', 'lebensmittel', 'supermarkt'],
@@ -1148,10 +1232,8 @@
             if (transactions.length === 0) {
                 return;
             }
-            if (confirm('Möchten Sie wirklich alle Umsätze löschen?')) {
-                transactions = [];
-                updateTable();
-            }
+            // Neue Logik: Datenbank leeren
+            clearDatabase();
         }
 
         function exportCSV() {
@@ -3673,6 +3755,22 @@
                     break;
                 case 'amount_asc':
                     pendingTransactions.sort((a, b) => a.amount - b.amount);
+                    break;
+                case 'amount_desc':
+                    pendingTransactions.sort((a, b) => b.amount - a.amount);
+                    break;
+                case 'confidence':
+                    pendingTransactions.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+                    break;
+                case 'warnings':
+                    pendingTransactions.sort((a, b) => (b.warnings?.length || 0) - (a.warnings?.length || 0));
+                    break;
+                case 'fx':
+                    pendingTransactions.sort((a, b) => (b.foreignCurrency ? 1 : 0) - (a.foreignCurrency ? 1 : 0));
+                    break;
+            }
+            refreshPreviewTable();
+        }
                     break;
                 case 'amount_desc':
                     pendingTransactions.sort((a, b) => b.amount - a.amount);
