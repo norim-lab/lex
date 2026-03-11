@@ -16,10 +16,11 @@ jobs:
       with:
         host: ${{ secrets.SSH_HOST }}
         username: ${{ secrets.SSH_USERNAME }}
-        password: ${{ secrets.SSH_PASSWORD }}
+        key: ${{ secrets.SSH_KEY }}
         port: 22
         source: "."
         target: "/home/miron777/web/lex.zeitblytz.media/public_html"
         strip_components: 0
         overwrite: true
+        debug: true  # Debug-Modus aktivieren!
         # exclude entfernt, da nicht unterstützt
