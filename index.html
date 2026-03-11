@@ -115,12 +115,26 @@
                             <span class="statement-name">📄 ${s.filename}</span>
                             <span class="statement-period">Importiert am ${date} • ${s.period || 'Zeitraum unbekannt'}</span>
                         </div>
-                        <div class="statement-status ${statusClass}">
-                            ${statusIcon} ${statusText}
+                        <div class="statement-actions" style="display: flex; gap: 10px; align-items: center;">
+                            <div class="statement-status ${statusClass}">
+                                ${statusIcon} ${statusText}
+                            </div>
+                            <button class="btn-danger" style="padding: 2px 6px; font-size: 12px;" onclick="event.stopPropagation(); deleteStatement(${s.id})">🗑️</button>
                         </div>
                     </div>
                 `;
             }).join('');
+        }
+
+        async function deleteStatement(id) {
+            if (!confirm("Auszug wirklich löschen? Alle zugehörigen Umsätze werden entfernt.")) return;
+            try {
+                await fetch(`${API_URL}?action=statement&id=${id}`, { method: 'DELETE' });
+                loadStatements();
+                loadTransactions(); // Update global list too
+            } catch (e) {
+                alert("Fehler beim Löschen");
+            }
         }
 
         async function openStatement(id) {
