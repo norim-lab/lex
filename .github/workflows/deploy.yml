@@ -22,4 +22,4 @@ jobs:
         target: "/home/miron777/web/lex.zeitblytz.media/public_html"
         strip_components: 0
         overwrite: true
-        exclude: ".git, .github, .gitignore, README.md, deploy.php, check_exec.php"
+        # exclude entfernt, da nicht unterstützt
