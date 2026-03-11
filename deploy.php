@@ -39,7 +39,8 @@ logMsg("Return Code: $returnVar");
 if ($returnVar === 0) {
     echo "<h1>Deploy Success!</h1><pre>$outputStr</pre>";
 } else {
-    echo "<h1>Deploy Failed!</h1><pre>$outputStr</pre>";
-    http_response_code(500);
+    echo "<h1>Deploy Failed! (Exit Code: $returnVar)</h1>";
+    echo "<pre>$outputStr</pre>";
+    // http_response_code(500); // Entfernt, damit wir den Fehler sehen!
 }
 ?>
