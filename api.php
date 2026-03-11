@@ -1,24 +1,26 @@
 <?php
-// SQLite Datenbank-Verbindung
-$dbFile = 'database.sqlite';
-$dsn = "sqlite:$dbFile";
+// MySQL/MariaDB Zugangsdaten
+$host = 'localhost';
+$dbname = 'miron777_lex';
+$username = 'miron777_lex';
+$password = 'LexwareSecure2026!';
 
 try {
-    $pdo = new PDO($dsn);
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // Tabelle erstellen, falls nicht vorhanden
     $pdo->exec("CREATE TABLE IF NOT EXISTS transactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        date TEXT NOT NULL,
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        date DATE NOT NULL,
         purpose TEXT NOT NULL,
-        amount REAL NOT NULL,
-        type TEXT NOT NULL,
-        category TEXT,
-        currency TEXT DEFAULT 'EUR',
-        source TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(date, purpose, amount)
+        amount DECIMAL(10, 2) NOT NULL,
+        type VARCHAR(20) NOT NULL,
+        category VARCHAR(50),
+        currency VARCHAR(10) DEFAULT 'EUR',
+        source VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_transaction (date, purpose(255), amount)
     )");
 
 } catch (PDOException $e) {
@@ -35,6 +37,12 @@ if ($method === 'GET') {
     // Alle Transaktionen abrufen
     $stmt = $pdo->query("SELECT * FROM transactions ORDER BY date DESC, created_at DESC");
     $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Zahlen als Numbers zurückgeben (MySQL liefert Strings)
+    foreach ($transactions as &$t) {
+        $t['amount'] = (float)$t['amount'];
+    }
+    
     echo json_encode($transactions);
 
 } elseif ($method === 'POST') {
@@ -49,7 +57,7 @@ if ($method === 'GET') {
     $savedCount = 0;
     $errors = [];
 
-    $stmt = $pdo->prepare("INSERT OR IGNORE INTO transactions (date, purpose, amount, type, category, currency, source) VALUES (:date, :purpose, :amount, :type, :category, :currency, :source)");
+    $stmt = $pdo->prepare("INSERT IGNORE INTO transactions (date, purpose, amount, type, category, currency, source) VALUES (:date, :purpose, :amount, :type, :category, :currency, :source)");
 
     foreach ($input as $t) {
         try {
@@ -78,8 +86,7 @@ if ($method === 'GET') {
     ]);
 
 } elseif ($method === 'DELETE') {
-    // Alles löschen (Vorsicht!)
-    // Optional: Passwortschutz hier einbauen
+    // Alles löschen
     $pdo->exec("DELETE FROM transactions");
     echo json_encode(['success' => true, 'message' => 'Alle Daten gelöscht']);
 }
