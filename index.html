@@ -5,8 +5,288 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lexware CSV Generator</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Statement Detail Modal -->
+    <div id="statementModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3 id="statementModalTitle">Kontoauszug Details</h3>
+                <span class="close-btn" onclick="closeStatementModal()">&times;</span>
+            </div>
+            <div id="statementModalContent">
+                <div class="balance-comparison" style="margin-bottom: 20px;">
+                    <div class="balance-card">
+                        <h4>Anfangssaldo</h4>
+                        <div class="amount" id="stmtOpeningBalance">-</div>
+                    </div>
+                    <div class="balance-card">
+                        <h4>Endsaldo (Soll)</h4>
+                        <div class="amount" id="stmtClosingBalance">-</div>
+                    </div>
+                    <div class="balance-card" id="stmtCalculatedCard">
+                        <h4>Berechnet</h4>
+                        <div class="amount" id="stmtCalculatedBalance">-</div>
+                    </div>
+                </div>
+
+                <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+                    <table class="preview-table">
+                        <thead>
+                            <tr>
+                                <th>Datum</th>
+                                <th>Zweck</th>
+                                <th>Betrag</th>
+                                <th>Aktion</th>
+                            </tr>
+                        </thead>
+                        <tbody id="statementTransactionsList">
+                            <!-- Transactions here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="modal-actions" style="justify-content: space-between; margin-top: 20px;">
+                    <button class="btn-warning" onclick="showAddTransactionForm()">+ Fehlende Buchung hinzufügen</button>
+                    <div>
+                        <button class="btn-danger" onclick="closeStatementModal()">Schließen</button>
+                        <button class="btn-success" id="btnVerifyStatement" onclick="verifyCurrentStatement()">✓ Auszug als korrekt bestätigen</button>
+                    </div>
+                </div>
+                
+                <!-- Add Transaction Form (Hidden by default) -->
+                <div id="addTransactionForm" style="display: none; background: #f5f5f5; padding: 15px; margin-top: 15px; border-radius: 5px;">
+                    <h4>Manuelle Buchung hinzufügen</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Datum</label>
+                            <input type="date" id="addTransDate">
+                        </div>
+                        <div class="form-group" style="flex: 2;">
+                            <label>Zweck</label>
+                            <input type="text" id="addTransPurpose">
+                        </div>
+                        <div class="form-group">
+                            <label>Betrag</label>
+                            <input type="number" step="0.01" id="addTransAmount">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-secondary" onclick="hideAddTransactionForm()">Abbrechen</button>
+                        <button class="btn-success" onclick="saveNewTransaction()">Speichern</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        // --- STATEMENT LOGIC ---
+
+        let currentStatementId = null;
+        let currentStatementTransactions = [];
+
+        async function loadStatements() {
+            try {
+                const response = await fetch(API_URL + '?action=statements');
+                if (!response.ok) return;
+                const statements = await response.json();
+                renderStatementList(statements);
+            } catch (e) {
+                console.error("Error loading statements", e);
+            }
+        }
+
+        function renderStatementList(statements) {
+            const list = document.getElementById('statementList');
+            if (statements.length === 0) {
+                list.innerHTML = '<p style="color: #666; font-style: italic;">Noch keine Auszüge importiert.</p>';
+                return;
+            }
+
+            list.innerHTML = statements.map(s => {
+                const date = new Date(s.created_at).toLocaleDateString('de-DE');
+                const statusClass = s.status === 'verified' ? 'status-verified' : 'status-pending';
+                const statusIcon = s.status === 'verified' ? '✅' : '⚠️';
+                const statusText = s.status === 'verified' ? 'Bestätigt' : 'Prüfung ausstehend';
+                
+                return `
+                    <div class="statement-item" onclick="openStatement(${s.id})">
+                        <div class="statement-info">
+                            <span class="statement-name">📄 ${s.filename}</span>
+                            <span class="statement-period">Importiert am ${date} • ${s.period || 'Zeitraum unbekannt'}</span>
+                        </div>
+                        <div class="statement-status ${statusClass}">
+                            ${statusIcon} ${statusText}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function openStatement(id) {
+            currentStatementId = id;
+            try {
+                const response = await fetch(`${API_URL}?action=transactions&statement_id=${id}`);
+                const transactions = await response.json();
+                
+                // Fetch statement details (we need balance info) - reusing the list fetch for now or finding from DOM?
+                // Better: fetch fresh statement info. Since we don't have a single GET statement endpoint, we filter from list or add one.
+                // For now, let's fetch list again to find it.
+                const listResp = await fetch(API_URL + '?action=statements');
+                const allStatements = await listResp.json();
+                const statement = allStatements.find(s => s.id == id);
+
+                renderStatementDetails(transactions, statement);
+            } catch (e) {
+                alert("Fehler beim Laden des Auszugs: " + e.message);
+            }
+        }
+
+        function renderStatementDetails(transactions, statement) {
+            currentStatementTransactions = transactions;
+            
+            document.getElementById('statementModalTitle').innerText = statement.filename;
+            document.getElementById('stmtOpeningBalance').innerText = parseFloat(statement.opening_balance).toFixed(2) + ' €';
+            document.getElementById('stmtClosingBalance').innerText = parseFloat(statement.closing_balance).toFixed(2) + ' €';
+            
+            // Calculate actual balance
+            let calcBalance = parseFloat(statement.opening_balance);
+            transactions.forEach(t => calcBalance += parseFloat(t.amount));
+            
+            document.getElementById('stmtCalculatedBalance').innerText = calcBalance.toFixed(2) + ' €';
+            
+            // Color code calculation
+            const diff = Math.abs(calcBalance - parseFloat(statement.closing_balance));
+            const card = document.getElementById('stmtCalculatedCard');
+            if (diff < 0.05) {
+                card.style.background = '#e8f5e9'; // Green
+                card.style.color = '#2e7d32';
+            } else {
+                card.style.background = '#ffebee'; // Red
+                card.style.color = '#c62828';
+            }
+
+            // Verify button state
+            const verifyBtn = document.getElementById('btnVerifyStatement');
+            if (statement.status === 'verified') {
+                verifyBtn.disabled = true;
+                verifyBtn.innerText = "Bereits bestätigt";
+                verifyBtn.classList.remove('btn-success');
+                verifyBtn.classList.add('btn-secondary');
+            } else {
+                verifyBtn.disabled = false;
+                verifyBtn.innerText = "✓ Auszug als korrekt bestätigen";
+                verifyBtn.classList.add('btn-success');
+                verifyBtn.classList.remove('btn-secondary');
+            }
+
+            // Render Table
+            const tbody = document.getElementById('statementTransactionsList');
+            tbody.innerHTML = transactions.map(t => `
+                <tr>
+                    <td>${new Date(t.date).toLocaleDateString('de-DE')}</td>
+                    <td>${t.purpose}</td>
+                    <td class="${t.amount >= 0 ? 'positive' : 'negative'}">${parseFloat(t.amount).toFixed(2)} €</td>
+                    <td>
+                        ${statement.status !== 'verified' ? 
+                            `<button class="btn-danger" style="padding: 2px 5px; font-size: 12px;" onclick="deleteTransactionFromStatement(${t.id})">Löschen</button>` 
+                            : ''}
+                    </td>
+                </tr>
+            `).join('');
+
+            document.getElementById('statementModal').style.display = 'block';
+        }
+
+        function closeStatementModal() {
+            document.getElementById('statementModal').style.display = 'none';
+            currentStatementId = null;
+        }
+
+        async function verifyCurrentStatement() {
+            if (!currentStatementId) return;
+            
+            try {
+                const response = await fetch(API_URL + '?action=verify_statement', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id: currentStatementId})
+                });
+                const res = await response.json();
+                if (res.success) {
+                    alert("Auszug bestätigt!");
+                    closeStatementModal();
+                    loadStatements(); // Refresh list
+                } else {
+                    alert("Fehler: " + (res.error || 'Unbekannt'));
+                }
+            } catch (e) {
+                alert("Verbindungsfehler");
+            }
+        }
+
+        function showAddTransactionForm() {
+            document.getElementById('addTransactionForm').style.display = 'block';
+            document.getElementById('addTransDate').valueAsDate = new Date();
+        }
+
+        function hideAddTransactionForm() {
+            document.getElementById('addTransactionForm').style.display = 'none';
+        }
+
+        async function saveNewTransaction() {
+            const date = document.getElementById('addTransDate').value;
+            const purpose = document.getElementById('addTransPurpose').value;
+            const amount = parseFloat(document.getElementById('addTransAmount').value);
+            
+            if (!date || !purpose || isNaN(amount)) {
+                alert("Bitte alle Felder ausfüllen.");
+                return;
+            }
+
+            try {
+                const response = await fetch(API_URL + '?action=add_transaction', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        statement_id: currentStatementId,
+                        date: date,
+                        purpose: purpose,
+                        amount: amount,
+                        type: amount >= 0 ? 'credit' : 'debit',
+                        category: 'manuell'
+                    })
+                });
+                
+                const res = await response.json();
+                if (res.success) {
+                    hideAddTransactionForm();
+                    // Reload details
+                    openStatement(currentStatementId);
+                } else {
+                    alert("Fehler beim Speichern: " + res.error);
+                }
+            } catch (e) {
+                alert("Netzwerkfehler");
+            }
+        }
+
+        async function deleteTransactionFromStatement(id) {
+            if (!confirm("Wirklich löschen?")) return;
+            try {
+                const response = await fetch(API_URL + '?action=delete_transaction', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id: id})
+                });
+                if ((await response.json()).success) {
+                    openStatement(currentStatementId); // Reload
+                }
+            } catch (e) {
+                alert("Fehler beim Löschen");
+            }
+        }
+
     </script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
     <style>
@@ -595,6 +875,44 @@
         .tab-content.active {
             display: block;
         }
+        /* Statement List Styles */
+        .statement-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .statement-item:hover {
+            background: #f5f5f5;
+            border-color: #1976d2;
+        }
+        .statement-info {
+            display: flex;
+            flex-direction: column;
+        }
+        .statement-name {
+            font-weight: bold;
+            color: #333;
+        }
+        .statement-period {
+            font-size: 12px;
+            color: #666;
+        }
+        .statement-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+        }
+        .status-pending { color: #ff9800; }
+        .status-verified { color: #2e7d32; }
+
     </style>
 </head>
 <body>
@@ -802,6 +1120,15 @@
             </div>
         </div>
 
+        <!-- NEU: Liste der erkannten Kontoauszüge -->
+        <div class="panel">
+            <h2>📄 Erkannte Kontoauszüge</h2>
+            <div id="statementList" class="statement-list" style="max-height: 300px; overflow-y: auto;">
+                <p style="color: #666; font-style: italic;">Noch keine Auszüge importiert.</p>
+            </div>
+        </div>
+
+
         <div class="panel">
             <h2>Umsatzliste</h2>
             <div class="table-container">
@@ -850,6 +1177,7 @@
         // Beim Laden der Seite: Daten abrufen
         document.addEventListener('DOMContentLoaded', async () => {
             await loadTransactions();
+            await loadStatements(); // NEW
             if (typeof setupDragAndDrop === 'function') setupDragAndDrop();
         });
 
@@ -1532,6 +1860,7 @@
                 
                 // Save for reopen
                 window.lastMergedResult = mergedResult;
+                window.currentBatchResults = allResults; // NEU: Speichere einzelne Ergebnisse für Statements
 
                 // Validation for merged result
                 try {
@@ -3773,30 +4102,96 @@
             refreshPreviewTable();
         }
 
-        function confirmPreviewTransactions() {
+        async function confirmPreviewTransactions() {
             const selectedTransactions = pendingTransactions.filter(t => t.selected !== false);
             
-            selectedTransactions.forEach(t => {
-                delete t.confidence;
-                delete t.warnings;
-                delete t.source;
-                delete t.rawLine;
-                delete t.selected;
-                
-                const potentialDuplicates = findPotentialDuplicates(t);
-                
-                if (potentialDuplicates.length > 0) {
-                    showDuplicateResolutionModal(t, potentialDuplicates[0]);
-                } else {
-                    transactions.push(t);
-                }
-            });
+            if (selectedTransactions.length === 0) {
+                alert("Keine Buchungen ausgewählt.");
+                return;
+            }
 
-            updateTable();
-            updateBalance();
+            // Fall 1: Batch-Import (Mehrere PDFs)
+            if (window.currentBatchResults && window.currentBatchResults.length > 0) {
+                let savedCount = 0;
+                for (const item of window.currentBatchResults) {
+                    // Filtere Transaktionen für dieses File, die auch im Preview ausgewählt wurden
+                    // Problem: Im Preview wurden alle gemerged. Wir müssen sie wieder trennen.
+                    // Aber 'item.result.transactions' hat die originalen IDs (hoffentlich).
+                    
+                    // Besser: Wir speichern einfach alle Transaktionen dieses Files, sofern sie im 'selectedTransactions' Set sind.
+                    // Da wir IDs haben, können wir prüfen.
+                    
+                    const fileTrans = item.result.transactions.filter(originalT => 
+                        selectedTransactions.some(selectedT => 
+                            selectedT.date.getTime() === originalT.date.getTime() && 
+                            selectedT.amount === originalT.amount &&
+                            selectedT.purpose === originalT.purpose
+                        )
+                    );
+                    
+                    if (fileTrans.length > 0) {
+                        const statementData = {
+                            filename: item.file,
+                            period: item.periodStart ? `${item.periodStart.toLocaleDateString()} - ${item.periodEnd.toLocaleDateString()}` : 'Unbekannt',
+                            openingBalance: item.result.openingBalance || 0,
+                            closingBalance: item.result.closingBalance || 0,
+                            transactions: fileTrans
+                        };
+                        
+                        await saveStatementToDB(statementData);
+                        savedCount++;
+                    }
+                }
+                alert(`${savedCount} Kontoauszüge erfolgreich angelegt!`);
+                window.currentBatchResults = null; // Reset
+            } 
+            // Fall 2: Einzel-Import (oder Copy&Paste)
+            else {
+                const statementData = {
+                    filename: window.lastImportedFilename || 'Manueller Import ' + new Date().toLocaleString(),
+                    period: 'Einzelimport',
+                    openingBalance: detectedOpeningBalance || 0,
+                    closingBalance: detectedClosingBalance || 0,
+                    transactions: selectedTransactions
+                };
+                await saveStatementToDB(statementData);
+                alert("Import erfolgreich!");
+            }
+
             closePreviewModal();
+            loadStatements(); // Liste aktualisieren
             
-            alert(`✅ ${selectedTransactions.length} Buchungen wurden übernommen!`);
+            // Switch to manual tab (optional, maybe stay on overview)
+            // switchTab('manual'); 
+        }
+
+        async function saveStatementToDB(data) {
+             try {
+                const response = await fetch(API_URL + '?action=create_statement', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: data.filename,
+                        period: data.period,
+                        openingBalance: data.openingBalance,
+                        closingBalance: data.closingBalance,
+                        transactions: data.transactions.map(t => ({
+                            date: t.date.toISOString().split('T')[0],
+                            purpose: t.purpose,
+                            amount: t.amount,
+                            type: t.amount >= 0 ? 'credit' : 'debit',
+                            category: t.category,
+                            currency: 'EUR'
+                        }))
+                    })
+                });
+                const res = await response.json();
+                if (!res.success) {
+                    console.error("Fehler beim Speichern des Statements:", res.error);
+                }
+            } catch (e) {
+                console.error("Netzwerkfehler beim Speichern:", e);
+            }
         }
 
         function closePreviewModal() {
