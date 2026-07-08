@@ -1,65 +1,22 @@
 <?php
-// Debugging aktivieren
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
-$secret = 'MironSecureDeploy2026';
-$logFile = 'deploy.log';
-
-function logMsg($msg) {
-    global $logFile;
-    $date = date('Y-m-d H:i:s');
-    file_put_contents($logFile, "[$date] $msg\n", FILE_APPEND);
-}
-
-// Token Check
-if (($_GET['token'] ?? '') !== $secret) {
-    logMsg("Access denied: Invalid token");
-    http_response_code(403);
-    die('Access denied');
-}
-
-logMsg("Deploy gestartet...");
-
-// Verzeichnis wechseln
-chdir(__DIR__);
-logMsg("Verzeichnis: " . getcwd());
-
-// Git Pull ausführen
-// Versuche verschiedene Methoden
-$outputStr = "";
-$returnVar = 0;
-
-if (function_exists('shell_exec')) {
-    logMsg("Using shell_exec...");
-    $outputStr = shell_exec("git pull origin main 2>&1");
-    if (empty($outputStr)) {
-        $outputStr = "Command executed but no output returned.";
-    }
-} elseif (function_exists('exec')) {
-    logMsg("Using exec...");
-    exec("git pull origin main 2>&1", $output, $returnVar);
-    $outputStr = implode("\n", $output);
-} elseif (function_exists('system')) {
-    logMsg("Using system...");
-    ob_start();
-    system("git pull origin main 2>&1", $returnVar);
-    $outputStr = ob_get_clean();
-} else {
-    logMsg("No execution function available!");
-    $outputStr = "Error: No execution function available (exec, shell_exec, system disabled)";
-    $returnVar = 1;
-}
-
-logMsg("Git Output:\n$outputStr");
-
-
-if ($returnVar === 0) {
-    echo "<h1>Deploy Success!</h1><pre>$outputStr</pre>";
-} else {
-    echo "<h1>Deploy Failed! (Exit Code: $returnVar)</h1>";
-    echo "<pre>$outputStr</pre>";
-    // http_response_code(500); // Entfernt, damit wir den Fehler sehen!
-}
-?>
+/**
+ * DEAKTIVIERT - diese Datei ist absichtlich ein Stub.
+ *
+ * Frueher konnte hierueber ein produktiver "git pull" ausgeloest werden
+ * (shell_exec / exec / system). Das war ein ernsthafter Angriffsvektor:
+ * Jeder, der den Token kannte (er stand im Repo), konnte auf dem Server
+ * beliebige Git-Operationen - und damit effektiv Code - ausfuehren.
+ *
+ * Deployments laufen jetzt ausschliesslich ueber GitHub Actions
+ * (.github/workflows/deploy.yml) per SCP mit SSH-Key, der NICHT im
+ * Repo liegt. Diese Datei existiert nur noch, damit ein eventuell noch
+ * auf dem Server vorhandener alter Stand beim naechsten Deploy
+ * ueberschrieben wird und keinen Schaden mehr anrichten kann.
+ *
+ * Es werden bewusst KEINE Shell-Funktionen mehr aufgerufen.
+ */
+http_response_code(410); // Gone
+header('Content-Type: application/json; charset=utf-8');
+echo json_encode([
+    'error' => 'Deploy ueber diese Datei ist deaktiviert. Deployments laufen via GitHub Actions.',
+]);

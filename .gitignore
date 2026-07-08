@@ -1,0 +1,13 @@
+# Secrets & lokale Konfiguration (niemals committen!)
+config.php
+*.local.php
+
+# Deploy-Logs / temporäre Dateien
+deploy.log
+*.log
+
+# Editor-/OS-Dateien
+.DS_Store
+Thumbs.db
+*.swp
+*.bak

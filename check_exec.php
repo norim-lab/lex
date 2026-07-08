@@ -1,38 +1,19 @@
 <?php
-// Prüfe verfügbare Funktionen
-$functions = ['exec', 'shell_exec', 'system', 'passthru', 'proc_open', 'popen'];
-$available = [];
-
-foreach ($functions as $func) {
-    if (function_exists($func) && !in_array($func, explode(',', ini_get('disable_functions')))) {
-        $available[] = $func;
-    }
-}
-
-echo "<h1>Verfügbare Shell-Funktionen:</h1>";
-if (empty($available)) {
-    echo "Keine! Alle sind deaktiviert.";
-} else {
-    echo "<ul>";
-    foreach ($available as $func) {
-        echo "<li>$func</li>";
-    }
-    echo "</ul>";
-    
-    // Teste die erste verfügbare Funktion mit 'ls'
-    echo "<h2>Test Output (ls -la):</h2><pre>";
-    $cmd = "ls -la 2>&1";
-    
-    if (in_array('shell_exec', $available)) {
-        echo shell_exec($cmd);
-    } elseif (in_array('passthru', $available)) {
-        passthru($cmd);
-    } elseif (in_array('system', $available)) {
-        system($cmd);
-    } elseif (in_array('exec', $available)) {
-        exec($cmd, $out);
-        echo implode("\n", $out);
-    }
-    echo "</pre>";
-}
-?>
+/**
+ * DEAKTIVIERT - diese Datei ist absichtlich ein Stub.
+ *
+ * Frueher listete diese Datei oeffentlich verfuegbare Shell-Funktionen
+ * (exec, shell_exec, system, passthru, proc_open, popen) und gab sogar
+ * die Ausgabe von "ls -la" preis. Das ist eine klassische Recon- und
+ * Informationsleck-Schwachstelle, die Angreifern hilft, den Server
+ * auszukundschaften.
+ *
+ * Es werden hier bewusst KEINE Shell-Funktionen abgefragt oder ausgefuehrt.
+ * Die Datei existiert nur noch, damit ein eventuell noch auf dem Server
+ * vorhandener alter Stand beim naechsten Deploy ueberschrieben wird.
+ */
+http_response_code(410); // Gone
+header('Content-Type: application/json; charset=utf-8');
+echo json_encode([
+    'error' => 'Shell-Diagnostik ueber diese Datei ist deaktiviert.',
+]);

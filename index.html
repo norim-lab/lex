@@ -102,7 +102,7 @@
 
         async function loadStatements() {
             try {
-                const response = await fetch(API_URL + '?action=statements');
+                const response = await apiFetch(API_URL + '?action=statements');
                 if (!response.ok) return;
                 const statements = await response.json();
                 renderStatementList(statements);
@@ -144,7 +144,7 @@
         async function deleteStatement(id) {
             if (!confirm("Auszug wirklich löschen? Alle zugehörigen Umsätze werden entfernt.")) return;
             try {
-                await fetch(`${API_URL}?action=statement&id=${id}`, { method: 'DELETE' });
+                await apiFetch(`${API_URL}?action=statement&id=${id}`, { method: 'DELETE' });
                 loadStatements();
                 loadTransactions(); // Update global list too
             } catch (e) {
@@ -155,7 +155,7 @@
         async function openStatement(id) {
             currentStatementId = id;
             try {
-                const response = await fetch(`${API_URL}?action=transactions&statement_id=${id}`);
+                const response = await apiFetch(`${API_URL}?action=transactions&statement_id=${id}`);
                 const transactions = await response.json();
                 
                 // Fetch statement details (we need balance info) - reusing the list fetch for now or finding from DOM?
@@ -277,7 +277,7 @@
 
         async function confirmTransaction(id) {
             try {
-                const response = await fetch(API_URL + '?action=confirm_transaction', {
+                const response = await apiFetch(API_URL + '?action=confirm_transaction', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({id: id})
@@ -322,7 +322,7 @@
             const category = document.getElementById(`edit-category-${id}`).value;
 
             try {
-                const response = await fetch(API_URL + '?action=update_transaction', {
+                const response = await apiFetch(API_URL + '?action=update_transaction', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -354,7 +354,7 @@
             if (!currentStatementId) return;
             
             try {
-                const response = await fetch(API_URL + '?action=verify_statement', {
+                const response = await apiFetch(API_URL + '?action=verify_statement', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({id: currentStatementId})
@@ -393,7 +393,7 @@
             }
 
             try {
-                const response = await fetch(API_URL + '?action=add_transaction', {
+                const response = await apiFetch(API_URL + '?action=add_transaction', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -426,7 +426,7 @@
         async function deleteTransactionFromStatement(id) {
             if (!confirm("Wirklich löschen?")) return;
             try {
-                const response = await fetch(API_URL + '?action=delete_transaction', {
+                const response = await apiFetch(API_URL + '?action=delete_transaction', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({id: id})
@@ -452,7 +452,7 @@
             
             try {
                 // 1. Get Raw Text
-                const textResp = await fetch(`${API_URL}?action=get_raw_text&id=${currentStatementId}`);
+                const textResp = await apiFetch(`${API_URL}?action=get_raw_text&id=${currentStatementId}`);
                 const textData = await textResp.json();
                 const rawText = textData.raw_text;
                 
@@ -1424,6 +1424,24 @@ ODER
         // Datenbank-API URL
         const API_URL = 'api.php';
 
+        // Liefert den App-Token aus dem lokalen Speicher (in den Einstellungen gepflegt)
+        function getApiToken() {
+            return localStorage.getItem('apiToken') || '';
+        }
+
+        /**
+         * Zentraler Wrapper um fetch() fuer die eigene API.
+         * Setzt automatisch den Content-Type und - wenn vorhanden - den
+         * Auth-Token im Header "X-API-Token", den api.php verlangt.
+         * Options sind dieselben wie bei fetch(). Rueckgabe: das fetch-Promise.
+         */
+        function apiFetch(url, options = {}) {
+            const token = getApiToken();
+            const headers = Object.assign({}, options.headers || {});
+            if (token) headers['X-API-Token'] = token;
+            return fetch(url, Object.assign({}, options, { headers }));
+        }
+
         // Globale Transaktionsliste
         let transactions = [];
         let pendingTransactions = [];
@@ -1440,7 +1458,7 @@ ODER
 
         async function loadTransactions() {
             try {
-                const response = await fetch(API_URL);
+                const response = await apiFetch(API_URL);
                 if (!response.ok) throw new Error('API Fehler');
                 
                 const data = await response.json();
@@ -1474,7 +1492,7 @@ ODER
             }));
 
             try {
-                const response = await fetch(API_URL, {
+                const response = await apiFetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(apiData)
@@ -1499,7 +1517,7 @@ ODER
             if (!confirm('Wirklich ALLE gespeicherten Daten löschen? Dies kann nicht rückgängig gemacht werden!')) return;
             
             try {
-                await fetch(API_URL, { method: 'DELETE' });
+                await apiFetch(API_URL, { method: 'DELETE' });
                 transactions = [];
                 updateTable(); // KORRIGIERT
                 updateBalance(); // Hinzugefügt
@@ -4125,7 +4143,7 @@ ODER
 
         async function saveStatementToDB(data) {
              try {
-                const response = await fetch(API_URL + '?action=create_statement', {
+                const response = await apiFetch(API_URL + '?action=create_statement', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -4193,10 +4211,14 @@ ODER
             const provider = document.getElementById('aiProvider').value;
             const apiKey = document.getElementById('aiApiKey').value;
             const zhipuModel = document.getElementById('zhipuModel')?.value || 'glm-4-plus';
-            
+
             localStorage.setItem('aiProvider', provider);
             localStorage.setItem('aiApiKey', apiKey);
             localStorage.setItem('zhipuModel', zhipuModel);
+
+            // App-Token (fuer api.php) mit pflegen
+            const tokenInput = document.getElementById('apiToken');
+            if (tokenInput) localStorage.setItem('apiToken', tokenInput.value.trim());
             
             const hint = document.getElementById('apiKeyHint');
             if (provider === 'zhipu') {
@@ -4217,6 +4239,8 @@ ODER
             if (modelSelect) {
                 modelSelect.value = settings.zhipuModel;
             }
+            const tokenInput = document.getElementById('apiToken');
+            if (tokenInput) tokenInput.value = getApiToken();
             updateAIModelVisibility(settings.provider);
         }
 
@@ -4647,6 +4671,13 @@ ${summaryLinesHtml || 'KEINE GEFUNDEN'}
                 <button class="close-btn" onclick="document.getElementById('settingsModal').style.display='none'">&times;</button>
             </div>
             <form style="padding: 20px;" onsubmit="event.preventDefault(); saveAISettings();">
+                <div style="margin-bottom: 20px; padding: 12px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 5px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: bold;">🔑 App-Token (Zugriff auf Datenbank):</label>
+                    <input type="password" id="apiToken" placeholder="Token aus config.php..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
+                    <small style="color: #555; display: block; margin-top: 5px;">
+                        Ohne gueltigen Token koennen keine Daten gelesen/gespeichert werden. Wert steht in der serverseitigen config.php.
+                    </small>
+                </div>
                 <div style="margin-bottom: 20px;">
                     <label style="display: block; margin-bottom: 8px; font-weight: bold;">KI-Anbieter:</label>
                     <select id="aiProvider" onchange="updateAIModelVisibility(this.value); saveAISettings();" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">

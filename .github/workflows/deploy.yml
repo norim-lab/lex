@@ -18,9 +18,12 @@ jobs:
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_KEY }}
         port: 22
-        source: "index.html,api.php"
+        # Wichtig: die neutralisierten Stubs (deploy.php, check_exec.php)
+        # werden MIT ausgeliefert, damit ein eventueller alter, gefaehrlicher
+        # Stand auf dem Server beim Deploy ueberschrieben wird.
+        # config.php bewusst NICHT deployen: enthaelt Secrets und liegt nur
+        # auf dem Server / lokal (siehe .gitignore).
+        source: "index.html,api.php,deploy.php,check_exec.php"
         target: "/home/miron777/web/lex.zeitblytz.media/public_html"
         strip_components: 0
         overwrite: true
-        debug: true
-        # exclude entfernt, da nicht unterstützt
