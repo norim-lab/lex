@@ -9,10 +9,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Copy files via SCP
-      uses: appleboy/scp-action@master
+      uses: appleboy/scp-action@v1.0.0
       with:
         host: ${{ secrets.SSH_HOST }}
         username: ${{ secrets.SSH_USERNAME }}
@@ -22,5 +22,5 @@ jobs:
         target: "/home/miron777/web/lex.zeitblytz.media/public_html"
         strip_components: 0
         overwrite: true
-        # debug: true  # Debug-Modus wieder aus
+        debug: true
         # exclude entfernt, da nicht unterstützt
